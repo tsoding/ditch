@@ -149,5 +149,4 @@ Simp :: #import "Simp";
 #import "System";
 #import "Thread";
 Input :: #import "Input";
-#load "./epoll.jai";
 #load "twitch_irc/module.jai";

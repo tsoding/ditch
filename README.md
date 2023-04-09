@@ -6,7 +6,7 @@ A simple Twitch Client
 
 ```console
 $ jai -version
-Version: beta 0.1.059, built on 17 March 2023.
+Version: beta 0.1.060, built on 8 April 2023.
 $ jai ditch.jai
 $ ./ditch
 ```
