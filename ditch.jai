@@ -15,9 +15,13 @@ get_environment_variable :: (name: string) -> (string, bool) {
     return to_string(result), true;
 }
 
-twitch: Twitch_Chat([..]string);
-chat_log: [..]string;
-mutex_chat: Mutex;
+Chat_Message :: struct {
+    nick: string;
+    message: string;
+}
+
+chat_log: [..]Chat_Message;
+twitch: Twitch_Chat([..]Chat_Message);
 
 main :: () {
     window_title :: "Ditch";
@@ -25,56 +29,41 @@ main :: () {
     Simp.set_render_target(my_window);
 
     my_init_fonts();
-    ui_init();
 
-    init(*mutex_chat);
+    success := false;
+    nick, pass : string;
 
-    twitch_thread: Thread;
-    thread_init(*twitch_thread, (thread: *Thread) -> s64 {
-        print("Twitch thread is running...\n");
-        success := false;
-        nick, pass : string;
-        
-        nick, success = get_environment_variable("DITCH_NICK");
-        if !success {
-            print("DITCH_NICK environment variable is not provided\n");
-            exit(1);
-        }
-        pass, success = get_environment_variable("DITCH_PASS");
-        if !success {
-            print("DITCH_PASS environment variable is not provided\n");
-            exit(1);
-        }
+    nick, success = get_environment_variable("DITCH_NICK");
+    if !success {
+        print("DITCH_NICK environment variable is not provided\n");
+        exit(1);
+    }
+    pass, success = get_environment_variable("DITCH_PASS");
+    if !success {
+        print("DITCH_PASS environment variable is not provided\n");
+        exit(1);
+    }
 
-        event_callback :: (event: Twitch_Event, chat_log: *[..]string) {
-            if event.type == {
-                case .AUTHENTICATED; {
-                    cmd_join(*twitch, "#tsoding");
-                }
-                case .PRIVMSG; {
-                    lock(*mutex_chat);
-                    array_add(chat_log, copy_string(event.message));
-                    unlock(*mutex_chat);
-                }
+    event_callback :: (event: Twitch_Event, chat_log: *[..]Chat_Message) {
+        if event.type == {
+            case .AUTHENTICATED; {
+                cmd_join(*twitch, "#tsoding");
+            }
+            case .PRIVMSG; {
+                array_add(chat_log, .{
+                    nick = copy_string(get_tag_value(event.tags, "display-name")),
+                    message = copy_string(event.message)
+                });
             }
         }
+    }
 
-        success = init(*twitch, event_callback, *chat_log, verbose = true);
-        if !success then exit(1);
-        success = connect(*twitch, nick, pass);
-        if !success then exit(1);
-        defer deinit(*twitch);
-
-
-        while true {
-            success = update(*twitch);
-            if !success then break; // Or reconnect or whatever
-        }
-
-        return 0;
-    });
-
-    thread_start(*twitch_thread);
+    success = init(*twitch, event_callback, *chat_log, verbose = true);
+    if !success then exit(1);
+    success = connect(*twitch, nick, pass);
+    if !success then exit(1);
+    pass = "---";
+    defer deinit(*twitch);
 
     current_time: float64;
     last_time: float64;
@@ -86,39 +75,43 @@ main :: () {
         Clamp(*dt, 0, 0.1);
         last_time = current_time;
 
-        // success = update(*twitch);
-        // if !success then break; // Or reconnect or whatever
+        success = update(*twitch, 0);
+        if !success then break; // Or reconnect or whatever
 
         Input.update_window_events();
 
         for event: Input.events_this_frame {
             if event.type == .QUIT then quit = true;
 
-            getrect_handle_event(event);
-
             if event.type == {
-              case .KEYBOARD;
-                if event.key_pressed && event.key_code == .ESCAPE {
-                    active_widget_deactivate_all();
+            case .KEYBOARD;
+                if event.key_pressed {
+                    if event.key_code == {
+                        case .ENTER; {
+                            message := os_clipboard_get_text();
+                            cmd_privmsg(*twitch, "#tsoding", message);
+                            array_add(*chat_log, .{
+                                nick = nick,
+                                message = message,
+                            });
+                        }
+                    }
                 }
             }
         }
 
-        // 0: foo 
-        // 1: bar 
-        // 2: baz
-
-        // 0: baz
-        // 1: bar 
-        // 2: foo
-
         Simp.clear_render_target(.2, .05, .05, 1);
-        lock(*mutex_chat);
         for < chat_log {
-            Simp.prepare_text(my_font, it);
-            Simp.draw_prepared_text(my_font, 0, window_height/24*(chat_log.count - it_index - 1), make_vector4(1, 1, 1, 1));
+            nick_color := make_vector4(.8, .5, 1, 1);
+            nick_text := tprint("<%> ", it.nick);
+            nick_width := Simp.prepare_text(my_font, nick_text);
+            Simp.draw_prepared_text(my_font, 0, window_height/24*(chat_log.count - it_index - 1), nick_color);
+
+            message_color := make_vector4(1, 1, 1, 1);
+            message_text := it.message;
+            Simp.prepare_text(my_font, message_text);
+            Simp.draw_prepared_text(my_font, nick_width, window_height/24*(chat_log.count - it_index - 1), message_color);
         }
-        unlock(*mutex_chat);
         Simp.swap_buffers(my_window);
 
         reset_temporary_storage();
@@ -134,7 +127,7 @@ my_init_fonts :: () {
 
         working_directory_set = true;
     }
-    
+
     pixel_height := window_height / 24;
     my_font = Simp.get_font_at_size("fonts", "iosevka-regular.ttf", pixel_height);
     assert(my_font != null);
@@ -143,10 +136,10 @@ my_init_fonts :: () {
 #import "Basic";
 #import "Window_Creation";
 Simp :: #import "Simp";
-#import "GetRect";
 #import "Math";
 #import "String";
 #import "System";
 #import "Thread";
+#import "Clipboard";
 Input :: #import "Input";
 #load "twitch_irc/module.jai";

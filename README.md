@@ -16,7 +16,7 @@ $ ./ditch
 ## Roadmap
 
 - [x] Read chat
-- [ ] Write chat
+- [x] Write chat
 - [ ] See viewer count
 - [ ] Change the title
 - [ ] Browse other channels and raid them
