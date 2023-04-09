@@ -1,5 +1,7 @@
 # Ditch
 
+**WARNING! This software is UNFINISHED! Use it at your own risk!**
+
 A simple Twitch Client
 
 ## Quick Start
