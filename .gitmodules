@@ -1,0 +1,3 @@
+[submodule "twitch_irc"]
+	path = twitch_irc
+	url = git@github.com:rluba/twitch_irc.git
