@@ -190,13 +190,25 @@ main :: () {
             }
         }
 
-        Simp.clear_render_target(.2, .05, .05, 1);
+        hexcode :: (code: string) -> Vector4 {
+            value := string_to_int(code, base = 16, T = u64);
+            a := ((value>>(8*0))&0xFF)/255.0;
+            b := ((value>>(8*1))&0xFF)/255.0;
+            g := ((value>>(8*2))&0xFF)/255.0;
+            r := ((value>>(8*3))&0xFF)/255.0;
+            return make_vector4(r, g, b, a);
+        }
+
+        {
+            using background_color :: #run hexcode("121f05ff");
+            Simp.clear_render_target(x, y, z, w);
+        }
 
         lock(*current_stream_mutex);
         local_copy_of_current_stream_for_thread_safety := current_stream;
         unlock(*current_stream_mutex);
 
-        info_color := make_vector4(.5, .5, 8, 1);
+        info_color :: #run hexcode("c8f67aff");
 
         viewer_count_text := tprint("Viewers: %", local_copy_of_current_stream_for_thread_safety.viewer_count);
         Simp.prepare_text(my_font, viewer_count_text);
@@ -206,18 +218,21 @@ main :: () {
         Simp.prepare_text(my_font, title_text);
         Simp.draw_prepared_text(my_font, 0, window_height/24, info_color);
 
+        MESSAGE_PADDING :: 10;
+
         for < chat_log {
             row := it_index - 2;
+            y := (window_height/24 + MESSAGE_PADDING)*(chat_log.count - row - 1);
 
-            nick_color := make_vector4(.8, .5, 1, 1);
+            nick_color :: #run hexcode("c4d533ff");
             nick_text := tprint("<%> ", it.nick);
             nick_width := Simp.prepare_text(my_font, nick_text);
-            Simp.draw_prepared_text(my_font, 0, window_height/24*(chat_log.count - row - 1), nick_color);
+            Simp.draw_prepared_text(my_font, 0, y, nick_color);
 
-            message_color := make_vector4(1, 1, 1, 1);
+            message_color :: #run hexcode("ffffffff");
             message_text := it.message;
             Simp.prepare_text(my_font, message_text);
-            Simp.draw_prepared_text(my_font, nick_width, window_height/24*(chat_log.count - row - 1), message_color);
+            Simp.draw_prepared_text(my_font, nick_width, y, message_color);
         }
         Simp.swap_buffers(my_window);
 
