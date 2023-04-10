@@ -1,6 +1,6 @@
 # Ditch
 
-**WARNING! This software is UNFINISHED! Use it at your own risk!**
+**WARNING! This software is UNFINISHED! Use it at your own risk! In fact, it may never be useful for anybody except the original author.**
 
 A simple Twitch Client
 
