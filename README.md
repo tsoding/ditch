@@ -9,7 +9,7 @@ A simple Twitch Client
 ```console
 $ jai -version
 Version: beta 0.1.060, built on 8 April 2023.
-$ jai ditch.jai
+$ jai -import_dir . ditch.jai
 $ ./ditch
 ```
 
@@ -17,6 +17,5 @@ $ ./ditch
 
 - [x] Read chat
 - [x] Write chat
-- [ ] See viewer count
+- [x] See viewer count
 - [ ] Change the title
-- [ ] Browse other channels and raid them

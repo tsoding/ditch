@@ -1,3 +1,9 @@
 [submodule "twitch_irc"]
 	path = twitch_irc
 	url = git@github.com:rluba/twitch_irc.git
+[submodule "unicode_utils"]
+	path = unicode_utils
+	url = git@github.com:rluba/jai-unicode.git
+[submodule "jason"]
+	path = jason
+	url = git@github.com:rluba/jason.git
