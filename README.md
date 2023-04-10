@@ -18,4 +18,4 @@ $ ./ditch
 - [x] Read chat
 - [x] Write chat
 - [x] See viewer count
-- [ ] Change the title
+- [x] Change the title

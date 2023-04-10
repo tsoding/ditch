@@ -11,12 +11,19 @@ Twitch_Error :: struct {
 }
 
 Twitch_Stream :: struct {
+    title: string;
     user_name: string;
     viewer_count: int;
 }
 
-Twitch_Payload :: struct {
-    data: []Twitch_Stream;
+Twitch_User :: struct {
+    id: string;
+    login: string;
+    display_name: string;
+}
+
+Twitch_Payload :: struct(T: Type) {
+    data: []T;
 }
 
 get_environment_variable :: (name: string) -> (string, bool) {
@@ -42,13 +49,16 @@ Config :: struct {
 
 chat_log: [..]Chat_Message;
 twitch: Twitch_Chat([..]Chat_Message);
-viewer_count: int;
+current_user: Twitch_User;
+current_stream: Twitch_Stream;
+current_stream_mutex: Mutex;
 config: Config;
 
 main :: () {
     success := false;
 
     parse_config();
+    query_current_user();
 
     window_width = 800;
     window_height = 600;
@@ -57,6 +67,8 @@ main :: () {
     Simp.set_render_target(my_window);
 
     my_init_fonts();
+
+    init(*current_stream_mutex);
 
     viewer_count_thread: Thread;
     thread_init(*viewer_count_thread, (thread: *Thread) -> int {
@@ -68,13 +80,15 @@ main :: () {
             if code >= 400 {
                 print("ERROR: from %: %\n", url, content);
             } else {
-                payload : Twitch_Payload;
-                ok, payload = json_parse_string(content, Twitch_Payload);
+                payload : Twitch_Payload(Twitch_Stream);
+                ok, payload = json_parse_string(content, type_of(payload));
                 if ok {
                     if payload.data.count > 0 {
-                        atomic_swap(*viewer_count, payload.data[0].viewer_count);
+                        lock(*current_stream_mutex);
+                        current_stream = payload.data[0];
+                        unlock(*current_stream_mutex);
                     } else {
-                        atomic_swap(*viewer_count, 0);
+                        memset(*current_stream, 0, size_of(type_of(current_stream)));
                     }
                 } else {
                     print("ERROR: could not parse response from %\n", url);
@@ -129,10 +143,10 @@ main :: () {
 
             if it.window == my_window {
                 should_reinit := (it.width != window_width) || (it.height != window_height);
-                
+
                 window_width  = it.width;
                 window_height = it.height;
-                
+
                 if should_reinit my_init_fonts();  // Resize the font for the new window size.
             }
         }
@@ -152,6 +166,25 @@ main :: () {
                                 message = message,
                             });
                         }
+
+                        case #char "T"; if event.ctrl_pressed {
+                            Title_Patch :: struct {
+                                title: string;
+                            }
+                            content: string;
+                            status: int;
+                            success, content, status = request(
+                                    .PATCH, tprint("https://api.twitch.tv/helix/channels?broadcaster_id=%", current_user.id),
+                                    config.client_id, config.oauth_token,
+                                    data = json_write_string(Title_Patch.{
+                                        title = os_clipboard_get_text()
+                                    }));
+                            assert(success);
+                            print("------------------------------\n");
+                            print("Content: %\n", content);
+                            print("Status: %\n", status);
+                            print("------------------------------\n");
+                        }
                     }
                 }
             }
@@ -159,10 +192,19 @@ main :: () {
 
         Simp.clear_render_target(.2, .05, .05, 1);
 
-        viewer_count_color := make_vector4(.1, .5, 8, 1);
-        viewer_count_text := tprint("Viewers: %", atomic_read(*viewer_count));
+        lock(*current_stream_mutex);
+        local_copy_of_current_stream_for_thread_safety := current_stream;
+        unlock(*current_stream_mutex);
+
+        info_color := make_vector4(.5, .5, 8, 1);
+
+        viewer_count_text := tprint("Viewers: %", local_copy_of_current_stream_for_thread_safety.viewer_count);
         Simp.prepare_text(my_font, viewer_count_text);
-        Simp.draw_prepared_text(my_font, 0, 0, viewer_count_color);
+        Simp.draw_prepared_text(my_font, 0, 0, info_color);
+
+        title_text := tprint("Title: %", local_copy_of_current_stream_for_thread_safety.title);
+        Simp.prepare_text(my_font, title_text);
+        Simp.draw_prepared_text(my_font, 0, window_height/24, info_color);
 
         for < chat_log {
             row := it_index - 2;
@@ -183,6 +225,7 @@ main :: () {
         sleep_milliseconds(10);
     }
 }
+
 
 #if OS == .WINDOWS {
     PATH_SEPARATOR_STRING :: "\\";
@@ -255,6 +298,34 @@ parse_config :: () {
     }
 }
 
+query_current_user :: () {
+    url :: "https://api.twitch.tv/helix/users";
+    ok, content, code := request(.GET, "https://api.twitch.tv/helix/users", config.client_id, config.oauth_token, data = tprint("login=%", config.username));
+    if !ok {
+        print("ERROR: could not query %\n", url);
+        exit(1);
+    }
+
+    if code >= 400 {
+        print("ERROR: could not query %: %\n", url, content);
+        exit(1);
+    }
+
+    payload: Twitch_Payload(Twitch_User);
+    ok, payload = json_parse_string(content, type_of(payload));
+    if !ok {
+        print("ERROR: could not parse payload from %: %", url, content);
+        exit(1);
+    }
+
+    if payload.data.count <= 0 {
+        print("ERROR: payload did not contain any user\n");
+        exit(1);
+    }
+
+    current_user = payload.data[0];
+}
+
 my_init_fonts :: () {
     if !working_directory_set {
         // So that we can load our font, set to path of running executable.
@@ -286,6 +357,7 @@ Rest_Method :: enum {
     POST;
     PUT;
     DELETE;
+    PATCH;
 }
 
 // Here we use a baked Rest_Method, this means variable method must be known on compile time,
@@ -310,6 +382,7 @@ request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: s
 
     headerlist := curl_slist_append(null, tprint("Client-Id: %\0", client_id).data);
     headerlist = curl_slist_append(headerlist, tprint("Authorization: Bearer %\0", oauth_token).data);
+    headerlist = curl_slist_append(headerlist, "Content-Type: application/json\0".data);
     curl_easy_setopt(curl, .HTTPHEADER, headerlist);
 
     // Set target URL
@@ -324,9 +397,9 @@ request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: s
         }
         append(*url_builder, "?");
         append(*url_builder, data);
-        
+
         // Ideally we would only do one temp allocation here, something like builder_to_cstring
-        curl_easy_setopt(curl, .URL, temp_c_string(builder_to_string(*url_builder, temp))); 
+        curl_easy_setopt(curl, .URL, temp_c_string(builder_to_string(*url_builder, temp)));
     } else {
         curl_easy_setopt(curl, .URL, temp_c_string(url));
     }
@@ -343,6 +416,9 @@ request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: s
     } else if method == .DELETE {
         curl_easy_setopt(curl, .CUSTOMREQUEST, "DELETE");
         if data  curl_easy_setopt(curl, .POSTFIELDS, temp_c_string(data));
+    } else if method == .PATCH {
+        curl_easy_setopt(curl, .CUSTOMREQUEST, "PATCH");
+        if data  curl_easy_setopt(curl, .POSTFIELDS, temp_c_string(data));
     }
 
     // Perform the "easy" action
@@ -357,7 +433,7 @@ request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: s
     http_code: int;
     error_code = curl_easy_getinfo(curl, .RESPONSE_CODE, *http_code);
     assert(error_code == .OK, "I assume for now that error_code != .OK only if curl_easy_perform has failed. (Which might be a wrong assumption. That's why we have this assert in here)");
-    
+
     // In a real application you would most likely use default allocator,
     // here we only intend to use the string short term
     return true, builder_to_string(*builder, temp), http_code;
