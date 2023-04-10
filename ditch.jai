@@ -33,12 +33,23 @@ Chat_Message :: struct {
     message: string;
 }
 
+Config :: struct {
+    username: string;
+    oauth_token: string;
+    auto_join: string;
+    client_id: string;
+}
+
 chat_log: [..]Chat_Message;
 twitch: Twitch_Chat([..]Chat_Message);
 viewer_count: int;
-nick, oauth_token : string;
+config: Config;
 
 main :: () {
+    success := false;
+
+    parse_config();
+
     window_width = 800;
     window_height = 600;
     window_title :: "Ditch";
@@ -47,35 +58,27 @@ main :: () {
 
     my_init_fonts();
 
-    success := false;
-
-    nick, success = get_environment_variable("DITCH_NICK");
-    if !success {
-        print("DITCH_NICK environment variable is not provided\n");
-        exit(1);
-    }
-    oauth_token, success = get_environment_variable("DITCH_PASS");
-    if !success {
-        print("DITCH_PASS environment variable is not provided\n");
-        exit(1);
-    }
-
     viewer_count_thread: Thread;
     thread_init(*viewer_count_thread, (thread: *Thread) -> int {
-        client_id :: "8nh3lpfttelwy93c32g2qcu6uhld5u";
-
         while true {
-            ok, content, code := request(.GET, "https://api.twitch.tv/helix/streams", client_id, oauth_token, data = "user_login=tsoding");
+            url :: "https://api.twitch.tv/helix/streams";
+            ok, content, code := request(.GET, url, config.client_id, config.oauth_token, data = "user_login=tsoding");
             assert(ok);
 
             if code >= 400 {
-                print("ERROR: %\n", content);
+                print("ERROR: from %: %\n", url, content);
             } else {
                 payload : Twitch_Payload;
                 ok, payload = json_parse_string(content, Twitch_Payload);
-                assert(ok);
-                assert(payload.data.count > 0);
-                atomic_swap(*viewer_count, payload.data[0].viewer_count);
+                if ok {
+                    if payload.data.count > 0 {
+                        atomic_swap(*viewer_count, payload.data[0].viewer_count);
+                    } else {
+                        atomic_swap(*viewer_count, 0);
+                    }
+                } else {
+                    print("ERROR: could not parse response from %\n", url);
+                }
             }
 
             sleep_milliseconds(5000);
@@ -102,7 +105,7 @@ main :: () {
 
     success = init(*twitch, event_callback, *chat_log, verbose = true);
     if !success then exit(1);
-    success = connect(*twitch, nick, tprint("oauth:%", oauth_token));
+    success = connect(*twitch, config.username, tprint("oauth:%", config.oauth_token));
     if !success then exit(1);
     defer deinit(*twitch);
 
@@ -145,7 +148,7 @@ main :: () {
                             message := os_clipboard_get_text();
                             cmd_privmsg(*twitch, "#tsoding", message);
                             array_add(*chat_log, .{
-                                nick = nick,
+                                nick = config.username,
                                 message = message,
                             });
                         }
@@ -178,6 +181,77 @@ main :: () {
 
         reset_temporary_storage();
         sleep_milliseconds(10);
+    }
+}
+
+#if OS == .WINDOWS {
+    PATH_SEPARATOR_STRING :: "\\";
+} else #if OS == .LINUX {
+    PATH_SEPARATOR_STRING :: "/";
+} else #if OS == .MACOS {
+    PATH_SEPARATOR_STRING :: "/";
+}
+
+parse_config :: () {
+    success := false;
+
+    home_dir: string;
+    home_dir, success = get_home_directory();
+    if !success {
+        print("ERROR: could not get home folder for some reason\n");
+        return;
+    }
+
+    ditch_dir := join(home_dir, ".ditch", separator = PATH_SEPARATOR_STRING);
+    success = make_directory_if_it_does_not_exist(ditch_dir);
+    if !success {
+        print("ERROR: could not create folder %\n", ditch_dir);
+        return;
+    }
+
+    ditch_conf_path := join(ditch_dir, "ditch.conf", separator = PATH_SEPARATOR_STRING);
+    ditch_content: string;
+    ditch_content, success = read_entire_file(ditch_conf_path);
+    if !success {
+        print("ERROR: could not reas file %\n", ditch_conf_path);
+        return;
+    }
+    lexer := lexer_new(ditch_content, ditch_conf_path);
+
+    token, result := lexer_next(*lexer);
+    while result == .OK {
+        if token.kind == .SYMBOL {
+            if token.text == {
+                case "username"; {
+                    token, success = lexer_expect_token(*lexer, .STRING);
+                    if !success then exit(1);
+                    config.username = token.text;
+                }
+                case "oauth_token"; {
+                    token, success = lexer_expect_token(*lexer, .STRING);
+                    if !success then exit(1);
+                    config.oauth_token = token.text;
+                }
+                case "auto_join"; {
+                    token, success = lexer_expect_token(*lexer, .STRING);
+                    if !success then exit(1);
+                    config.auto_join = token.text;
+                }
+                case "client_id"; {
+                    token, success = lexer_expect_token(*lexer, .STRING);
+                    if !success then exit(1);
+                    config.client_id = token.text;
+                }
+                case; {
+                    log_diag_at(token.loc, .ERROR, "Unknown command %", token.text);
+                    exit(1);
+                }
+            }
+            token, result = lexer_next(*lexer);
+        } else {
+            log_diag_at(token.loc, .ERROR, "expected % but got %", Token_Kind.SYMBOL, token.kind);
+            exit(1);
+        }
     }
 }
 
@@ -302,3 +376,4 @@ Simp :: #import "Simp";
 Input :: #import "Input";
 #load "twitch_irc/module.jai";
 #load "jason/module.jai";
+#load "lexer.jai";
