@@ -1,10 +1,3 @@
-window_width, window_height: int;
-
-working_directory_set := false;
-
-Font :: Simp.Dynamic_Font;
-my_font:     *Font;
-
 Twitch_Error :: struct {
     error: string;
     message: string;
@@ -26,15 +19,6 @@ Twitch_Payload :: struct(T: Type) {
     data: []T;
 }
 
-get_environment_variable :: (name: string) -> (string, bool) {
-    c_name: *u8 = talloc(name.count + 1);
-    memcpy(c_name, name.data, name.count);
-    c_name[name.count] = 0;
-    result := getenv(c_name);
-    if result == null return "", false;
-    return to_string(result), true;
-}
-
 Chat_Message :: struct {
     nick: string;
     message: string;
@@ -46,6 +30,10 @@ Config :: struct {
     auto_join: string;
     client_id: string;
 }
+
+window_width, window_height: int;
+working_directory_set := false;
+my_font:     *Font;
 
 chat_log: [..]Chat_Message;
 twitch: Twitch_Chat([..]Chat_Message);
@@ -485,6 +473,7 @@ request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: s
 #import "File_Utilities";
 #import "Window_Creation";
 Simp :: #import "Simp";
+Font :: Simp.Dynamic_Font;
 #import "Math";
 #import "String";
 #import "System";
