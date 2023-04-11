@@ -55,8 +55,6 @@ current_stream_mutex: Mutex;
 config: Config;
 
 main :: () {
-    success := false;
-
     parse_config();
     query_current_user();
 
@@ -117,10 +115,10 @@ main :: () {
         }
     }
 
-    success = init(*twitch, event_callback, *chat_log, verbose = true);
-    if !success then exit(1);
-    success = connect(*twitch, config.username, tprint("oauth:%", config.oauth_token));
-    if !success then exit(1);
+    ok := init(*twitch, event_callback, *chat_log, verbose = true);
+    if !ok then exit(1);
+    ok = connect(*twitch, config.username, tprint("oauth:%", config.oauth_token));
+    if !ok then exit(1);
     defer deinit(*twitch);
 
     current_time: float64;
@@ -133,8 +131,8 @@ main :: () {
         Clamp(*dt, 0, 0.1);
         last_time = current_time;
 
-        success = update(*twitch, 0);
-        if !success then break; // Or reconnect or whatever
+        ok = update(*twitch, 0);
+        if !ok then break; // Or reconnect or whatever
 
         Input.update_window_events();
 
@@ -173,13 +171,13 @@ main :: () {
                             }
                             content: string;
                             status: int;
-                            success, content, status = request(
+                            ok, content, status = request(
                                     .PATCH, tprint("https://api.twitch.tv/helix/channels?broadcaster_id=%", current_user.id),
                                     config.client_id, config.oauth_token,
                                     data = json_write_string(Title_Patch.{
                                         title = os_clipboard_get_text()
                                     }));
-                            assert(success);
+                            assert(ok);
                             print("------------------------------\n");
                             print("Content: %\n", content);
                             print("Status: %\n", status);
@@ -251,26 +249,23 @@ main :: () {
 }
 
 parse_config :: () {
-    success := false;
-
-    home_dir: string;
-    home_dir, success = get_home_directory();
-    if !success {
+    home_dir, ok := get_home_directory();
+    if !ok {
         print("ERROR: could not get home folder for some reason\n");
         return;
     }
 
     ditch_dir := join(home_dir, ".ditch", separator = PATH_SEPARATOR_STRING);
-    success = make_directory_if_it_does_not_exist(ditch_dir);
-    if !success {
+    ok = make_directory_if_it_does_not_exist(ditch_dir);
+    if !ok {
         print("ERROR: could not create folder %\n", ditch_dir);
         return;
     }
 
     ditch_conf_path := join(ditch_dir, "ditch.conf", separator = PATH_SEPARATOR_STRING);
     ditch_content: string;
-    ditch_content, success = read_entire_file(ditch_conf_path);
-    if !success {
+    ditch_content, ok = read_entire_file(ditch_conf_path);
+    if !ok {
         print("ERROR: could not reas file %\n", ditch_conf_path);
         return;
     }
@@ -281,23 +276,23 @@ parse_config :: () {
         if token.kind == .SYMBOL {
             if token.text == {
                 case "username"; {
-                    token, success = lexer_expect_token(*lexer, .STRING);
-                    if !success then exit(1);
+                    token, ok = lexer_expect_token(*lexer, .STRING);
+                    if !ok then exit(1);
                     config.username = token.text;
                 }
                 case "oauth_token"; {
-                    token, success = lexer_expect_token(*lexer, .STRING);
-                    if !success then exit(1);
+                    token, ok = lexer_expect_token(*lexer, .STRING);
+                    if !ok then exit(1);
                     config.oauth_token = token.text;
                 }
                 case "auto_join"; {
-                    token, success = lexer_expect_token(*lexer, .STRING);
-                    if !success then exit(1);
+                    token, ok = lexer_expect_token(*lexer, .STRING);
+                    if !ok then exit(1);
                     config.auto_join = token.text;
                 }
                 case "client_id"; {
-                    token, success = lexer_expect_token(*lexer, .STRING);
-                    if !success then exit(1);
+                    token, ok = lexer_expect_token(*lexer, .STRING);
+                    if !ok then exit(1);
                     config.client_id = token.text;
                 }
                 case; {
