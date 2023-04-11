@@ -135,22 +135,7 @@ main :: () {
                         }
 
                         case #char "T"; if event.ctrl_pressed {
-                            Title_Patch :: struct {
-                                title: string;
-                            }
-                            content: string;
-                            status: int;
-                            ok, content, status = request(
-                                    .PATCH, tprint("https://api.twitch.tv/helix/channels?broadcaster_id=%", current_user.id),
-                                    current_config.client_id, current_config.oauth_token,
-                                    data = json_write_string(Title_Patch.{
-                                        title = os_clipboard_get_text()
-                                    }));
-                            assert(ok);
-                            print("------------------------------\n");
-                            print("Content: %\n", content);
-                            print("Status: %\n", status);
-                            print("------------------------------\n");
+                            set_current_title_to(current_config, os_clipboard_get_text());
                         }
                     }
                 }
@@ -304,6 +289,31 @@ CONF, config.username, config.auto_join));
     }
 
     return config, true;
+}
+
+set_current_title_to :: (config: Config, title: string) -> bool {
+    Title_Patch :: struct {
+        title: string;
+    }
+
+    url := tprint("https://api.twitch.tv/helix/channels?broadcaster_id=%", current_user.id);
+    data := json_write_string(Title_Patch.{
+        title = title
+    });
+
+    ok, content, code := request(.PATCH, url, config.client_id, config.oauth_token, data = data);
+    if !ok {
+        print("ERROR: could not patch current title at %\n", url);
+        return false;
+    }
+
+    if code >= 400 {
+        print("ERROR: query to % return code %: %\n", url, code, content);
+        return false;
+    }
+
+    print("INFO: successfully set the title to %\n", title);
+    return true;
 }
 
 get_first_twitch_payload :: ($Payload: Type, config: Config, url: string, data: string) -> Payload, bool {
