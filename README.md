@@ -12,10 +12,3 @@ Version: beta 0.1.060, built on 8 April 2023.
 $ jai -import_dir . ditch.jai
 $ ./ditch
 ```
-
-## Roadmap
-
-- [x] Read chat
-- [x] Write chat
-- [x] See viewer count
-- [x] Change the title
