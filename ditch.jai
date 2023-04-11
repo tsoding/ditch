@@ -1,8 +1,3 @@
-Twitch_Error :: struct {
-    error: string;
-    message: string;
-}
-
 Twitch_Stream :: struct {
     title: string;
     user_name: string;
