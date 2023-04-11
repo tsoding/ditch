@@ -49,6 +49,7 @@ Config :: struct {
 
 chat_log: [..]Chat_Message;
 twitch: Twitch_Chat([..]Chat_Message);
+
 current_user: Twitch_User;
 current_stream: Twitch_Stream;
 current_stream_mutex: Mutex;
@@ -424,6 +425,7 @@ request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: s
     headerlist = curl_slist_append(headerlist, tprint("Authorization: Bearer %\0", oauth_token).data);
     headerlist = curl_slist_append(headerlist, "Content-Type: application/json\0".data);
     curl_easy_setopt(curl, .HTTPHEADER, headerlist);
+    defer curl_slist_free_all(headerlist);
 
     // Set target URL
     #if method == .GET {
