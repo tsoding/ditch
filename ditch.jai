@@ -27,7 +27,6 @@ Config :: struct {
 }
 
 window_width, window_height: int;
-working_directory_set := false;
 my_font:     *Font;
 
 chat_log: [..]Chat_Message;
@@ -39,6 +38,9 @@ current_stream_mutex: Mutex;
 current_config: Config;
 
 main :: () {
+    directory_of_running_executable := path_strip_filename(get_path_of_running_executable());
+    set_working_directory(directory_of_running_executable);
+
     current_config = parse_config();
     current_user = query_current_user(current_config);
 
@@ -48,7 +50,7 @@ main :: () {
     window := create_window(window_width, window_height, window_title);
     Simp.set_render_target(window);
 
-    my_init_fonts();
+    reload_fonts();
 
     init(*current_stream_mutex);
 
@@ -109,12 +111,11 @@ main :: () {
             Simp.update_window(it.window);
 
             if it.window == window {
-                should_reinit := (it.width != window_width) || (it.height != window_height);
-
-                window_width  = it.width;
-                window_height = it.height;
-
-                if should_reinit my_init_fonts();  // Resize the font for the new window size.
+                if (it.width != window_width) || (it.height != window_height) {
+                    window_width  = it.width;
+                    window_height = it.height;
+                    reload_fonts();  // Resize the font for the new window size.
+                }
             }
         }
 
@@ -357,18 +358,15 @@ query_current_user :: (config: Config) -> Twitch_User, bool {
     return user, ok;
 }
 
-my_init_fonts :: () {
-    if !working_directory_set {
-        // So that we can load our font, set to path of running executable.
-        path := path_strip_filename(get_path_of_running_executable());
-        set_working_directory(path);
-
-        working_directory_set = true;
-    }
-
+reload_fonts :: () -> bool {
+    font_file_name :: "iosevka-regular.ttf";
     pixel_height := window_height / 24;
-    my_font = Simp.get_font_at_size("fonts", "iosevka-regular.ttf", pixel_height);
-    assert(my_font != null);
+    my_font = Simp.get_font_at_size("fonts", font_file_name, pixel_height);
+    if my_font == null {
+        print("ERROR: could not load font % with size %\n", font_file_name, pixel_height);
+        return false;
+    }
+    return true;
 }
 
 // Curl expects a C function, that's why we have to use #c_call, and since #c_call doesn't provide a context and JAI function need it, we push_context
