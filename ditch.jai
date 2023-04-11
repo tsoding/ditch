@@ -50,8 +50,8 @@ main :: () {
     window_width = 800;
     window_height = 600;
     window_title :: "Ditch";
-    my_window := create_window(window_width, window_height, window_title);
-    Simp.set_render_target(my_window);
+    window := create_window(window_width, window_height, window_title);
+    Simp.set_render_target(window);
 
     my_init_fonts();
 
@@ -128,7 +128,7 @@ main :: () {
         for Input.get_window_resizes() {
             Simp.update_window(it.window);
 
-            if it.window == my_window {
+            if it.window == window {
                 should_reinit := (it.width != window_width) || (it.height != window_height);
 
                 window_width  = it.width;
@@ -221,13 +221,12 @@ main :: () {
             Simp.prepare_text(my_font, message_text);
             Simp.draw_prepared_text(my_font, nick_width, y, message_color);
         }
-        Simp.swap_buffers(my_window);
+        Simp.swap_buffers(window);
 
         reset_temporary_storage();
         sleep_milliseconds(10);
     }
 }
-
 
 #if OS == .WINDOWS {
     PATH_SEPARATOR_STRING :: "\\";
