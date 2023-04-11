@@ -476,4 +476,4 @@ Font :: Simp.Dynamic_Font;
 Input :: #import "Input";
 #load "twitch_irc/module.jai";
 #load "jason/module.jai";
-#load "lexer.jai";
+#load "config_lexer.jai";
