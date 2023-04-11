@@ -52,10 +52,10 @@ twitch: Twitch_Chat([..]Chat_Message);
 current_user: Twitch_User;
 current_stream: Twitch_Stream;
 current_stream_mutex: Mutex;
-config: Config;
+current_config: Config;
 
 main :: () {
-    parse_config();
+    current_config = parse_config();
     query_current_user();
 
     window_width = 800;
@@ -72,7 +72,7 @@ main :: () {
     thread_init(*viewer_count_thread, (thread: *Thread) -> int {
         while true {
             url :: "https://api.twitch.tv/helix/streams";
-            ok, content, code := request(.GET, url, config.client_id, config.oauth_token, data = "user_login=tsoding");
+            ok, content, code := request(.GET, url, current_config.client_id, current_config.oauth_token, data = "user_login=tsoding");
             assert(ok);
 
             if code >= 400 {
@@ -117,7 +117,7 @@ main :: () {
 
     ok := init(*twitch, event_callback, *chat_log, verbose = true);
     if !ok then exit(1);
-    ok = connect(*twitch, config.username, tprint("oauth:%", config.oauth_token));
+    ok = connect(*twitch, current_config.username, tprint("oauth:%", current_config.oauth_token));
     if !ok then exit(1);
     defer deinit(*twitch);
 
@@ -160,7 +160,7 @@ main :: () {
                             message := os_clipboard_get_text();
                             cmd_privmsg(*twitch, "#tsoding", message);
                             array_add(*chat_log, .{
-                                nick = config.username,
+                                nick = current_config.username,
                                 message = message,
                             });
                         }
@@ -173,7 +173,7 @@ main :: () {
                             status: int;
                             ok, content, status = request(
                                     .PATCH, tprint("https://api.twitch.tv/helix/channels?broadcaster_id=%", current_user.id),
-                                    config.client_id, config.oauth_token,
+                                    current_config.client_id, current_config.oauth_token,
                                     data = json_write_string(Title_Patch.{
                                         title = os_clipboard_get_text()
                                     }));
@@ -248,26 +248,50 @@ main :: () {
     PATH_SEPARATOR_STRING :: "/";
 }
 
-parse_config :: () {
+parse_config :: () -> Config, bool {
+    config: Config;
+
     home_dir, ok := get_home_directory();
     if !ok {
         print("ERROR: could not get home folder for some reason\n");
-        return;
+        return config, false;
     }
 
     ditch_dir := join(home_dir, ".ditch", separator = PATH_SEPARATOR_STRING);
     ok = make_directory_if_it_does_not_exist(ditch_dir);
     if !ok {
         print("ERROR: could not create folder %\n", ditch_dir);
-        return;
+        return config, false;
     }
 
     ditch_conf_path := join(ditch_dir, "ditch.conf", separator = PATH_SEPARATOR_STRING);
+    if !file_exists(ditch_conf_path) {
+        config.username = "example";
+        config.auto_join = "#example";
+        ok = write_entire_file(ditch_conf_path, tprint(#string CONF
+// -*- mode: c -*-
+// Your Twitch username and and the channel to auto join. Keep in mind that the channel must start with #
+username "%"
+auto_join "%"
+
+// You can get oauth_token and client_id at https://tsoding.github.io/kgbotka-login/
+oauth_token ""
+client_id ""
+// vim: set filetype=c :
+CONF, config.username, config.auto_join));
+        if !ok {
+            print("ERROR: could not generate default %\n", ditch_conf_path);
+            return config, false;
+        }
+        print("INFO: Generated default %\n", ditch_conf_path);
+        return config, true;
+    }
+
     ditch_content: string;
     ditch_content, ok = read_entire_file(ditch_conf_path);
     if !ok {
-        print("ERROR: could not reas file %\n", ditch_conf_path);
-        return;
+        print("ERROR: could not read file %\n", ditch_conf_path);
+        return config, false;
     }
     lexer := lexer_new(ditch_content, ditch_conf_path);
 
@@ -277,40 +301,46 @@ parse_config :: () {
             if token.text == {
                 case "username"; {
                     token, ok = lexer_expect_token(*lexer, .STRING);
-                    if !ok then exit(1);
+                    if !ok return config, false;
                     config.username = token.text;
                 }
                 case "oauth_token"; {
                     token, ok = lexer_expect_token(*lexer, .STRING);
-                    if !ok then exit(1);
+                    if !ok return config, false;
                     config.oauth_token = token.text;
                 }
                 case "auto_join"; {
                     token, ok = lexer_expect_token(*lexer, .STRING);
-                    if !ok then exit(1);
+                    if !ok return config, false;
                     config.auto_join = token.text;
                 }
                 case "client_id"; {
                     token, ok = lexer_expect_token(*lexer, .STRING);
-                    if !ok then exit(1);
+                    if !ok return config, false;
                     config.client_id = token.text;
                 }
                 case; {
                     log_diag_at(token.loc, .ERROR, "Unknown command %", token.text);
-                    exit(1);
+                    return config, false;
                 }
             }
             token, result = lexer_next(*lexer);
         } else {
             log_diag_at(token.loc, .ERROR, "expected % but got %", Token_Kind.SYMBOL, token.kind);
-            exit(1);
+            return config, false;
         }
     }
+
+    if result != .EOF {
+        return config, false;
+    }
+
+    return config, true;
 }
 
 query_current_user :: () {
     url :: "https://api.twitch.tv/helix/users";
-    ok, content, code := request(.GET, "https://api.twitch.tv/helix/users", config.client_id, config.oauth_token, data = tprint("login=%", config.username));
+    ok, content, code := request(.GET, "https://api.twitch.tv/helix/users", current_config.client_id, current_config.oauth_token, data = tprint("login=%", current_config.username));
     if !ok {
         print("ERROR: could not query %\n", url);
         exit(1);
@@ -450,6 +480,7 @@ request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: s
 }
 
 #import "Basic";
+#import "File_Utilities";
 #import "Window_Creation";
 Simp :: #import "Simp";
 #import "Math";
