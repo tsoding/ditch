@@ -60,26 +60,11 @@ main :: () {
     viewer_count_thread: Thread;
     thread_init(*viewer_count_thread, (thread: *Thread) -> int {
         while true {
-            url :: "https://api.twitch.tv/helix/streams";
-            ok, content, code := request(.GET, url, current_config.client_id, current_config.oauth_token, data = "user_login=tsoding");
-            assert(ok);
-
-            if code >= 400 {
-                print("ERROR: from %: %\n", url, content);
-            } else {
-                payload : Twitch_Payload(Twitch_Stream);
-                ok, payload = json_parse_string(content, type_of(payload));
-                if ok {
-                    if payload.data.count > 0 {
-                        lock(*current_stream_mutex);
-                        current_stream = payload.data[0];
-                        unlock(*current_stream_mutex);
-                    } else {
-                        memset(*current_stream, 0, size_of(type_of(current_stream)));
-                    }
-                } else {
-                    print("ERROR: could not parse response from %\n", url);
-                }
+            stream, ok := query_current_stream(current_config);
+            if ok {
+                lock(*current_stream_mutex);
+                current_stream = stream;
+                unlock(*current_stream_mutex);
             }
 
             sleep_milliseconds(5000);
@@ -326,11 +311,10 @@ CONF, config.username, config.auto_join));
     return config, true;
 }
 
-query_current_user :: (config: Config) -> Twitch_User, bool {
-    url :: "https://api.twitch.tv/helix/users";
-    ok, content, code := request(.GET, "https://api.twitch.tv/helix/users", config.client_id, config.oauth_token, data = tprint("login=%", config.username));
+get_first_twitch_payload :: ($Payload: Type, config: Config, url: string, data: string) -> Payload, bool {
+    ok, content, code := request(.GET, url, config.client_id, config.oauth_token, data = data);
     if !ok {
-        print("ERROR: could not query current user via %\n", url);
+        print("ERROR: could not query % via %\n", Type, url);
         return .{}, false;
     }
 
@@ -339,19 +323,33 @@ query_current_user :: (config: Config) -> Twitch_User, bool {
         return .{}, false;
     }
 
-    payload: Twitch_Payload(Twitch_User);
+    payload : Twitch_Payload(Payload);
     ok, payload = json_parse_string(content, type_of(payload));
     if !ok {
-        print("ERROR: could not parse Twitch payload from %: %", url, content);
+        print("ERROR: could not parse Twitch payload from %: %\n", url, content);
         return .{}, false;
     }
 
     if payload.data.count <= 0 {
-        print("ERROR: Twitch payload from % does not contain any user\n", url);
+        print("ERROR: Twitch payload from % does not contain any %\n", url, Payload);
         return .{}, false;
     }
 
     return payload.data[0], true;
+}
+
+query_current_stream :: (config: Config) -> Twitch_Stream, bool {
+    url :: "https://api.twitch.tv/helix/streams";
+    data := tprint("user_login=%", config.username);
+    stream, ok := get_first_twitch_payload(Twitch_Stream, config, url, data);
+    return stream, ok;
+}
+
+query_current_user :: (config: Config) -> Twitch_User, bool {
+    url :: "https://api.twitch.tv/helix/users";
+    data := tprint("login=%", config.username);
+    user, ok := get_first_twitch_payload(Twitch_User, config, url, data);
+    return user, ok;
 }
 
 my_init_fonts :: () {
