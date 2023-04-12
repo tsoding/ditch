@@ -96,7 +96,7 @@ main :: () {
             case .PRIVMSG; {
                 array_add(chat_log, .{
                     nick = copy_string(get_tag_value(event.tags, "display-name")),
-                    message = copy_string(event.message)
+                    message = copy_string(event.message) // TODO: some sort of special allocator for the messages?
                 });
             }
         }
@@ -109,9 +109,13 @@ main :: () {
         // I'm not sure what to do in that case, so let's just exit;
         exit(1);
     }
-    ok = connect(*twitch, current_config.username, tprint("oauth:%", current_config.oauth_token));
-    if !ok then exit(1);
     defer deinit(*twitch);
+
+    ok = connect(*twitch, current_config.username, tprint("oauth:%", current_config.oauth_token));
+    if !ok {
+        log_error("ERROR: Could not connect to Twitch");
+        exit(1);
+    }
 
     current_time: float64;
     last_time: float64;
@@ -124,7 +128,7 @@ main :: () {
         last_time = current_time;
 
         ok = update(*twitch, 0);
-        // if !ok then break; // Or reconnect or whatever
+        // if !ok then break; // TODO: reconnect on Twitch connection failure
 
         Input.update_window_events();
 
