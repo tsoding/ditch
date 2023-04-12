@@ -67,9 +67,8 @@ main :: () {
     reload_fonts();
 
     init(*current_stream_mutex);
-
     viewer_count_thread: Thread;
-    thread_init(*viewer_count_thread, (thread: *Thread) -> int {
+    ok := thread_init(*viewer_count_thread, (thread: *Thread) -> int {
         while true {
             stream, ok := query_current_stream(current_config);
             if ok {
@@ -83,8 +82,11 @@ main :: () {
 
         return 0;
     });
-
-    thread_start(*viewer_count_thread);
+    if ok {
+        thread_start(*viewer_count_thread);
+    } else {
+        print("ERROR: could not initialize the Viewer Count Polling Thread\n");
+    }
 
     event_callback :: (event: Twitch_Event, chat_log: *[..]Chat_Message) {
         if event.type == {
@@ -100,7 +102,7 @@ main :: () {
         }
     }
 
-    ok := init(*twitch, event_callback, *chat_log, verbose = true);
+    ok = init(*twitch, event_callback, *chat_log, verbose = true);
     if !ok then exit(1);
     ok = connect(*twitch, current_config.username, tprint("oauth:%", current_config.oauth_token));
     if !ok then exit(1);
