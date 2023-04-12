@@ -85,7 +85,7 @@ main :: () {
     if ok {
         thread_start(*viewer_count_thread);
     } else {
-        print("ERROR: could not initialize the Viewer Count Polling Thread\n");
+        log_error("ERROR: Could not initialize the Viewer Count Polling Thread");
     }
 
     event_callback :: (event: Twitch_Event, chat_log: *[..]Chat_Message) {
@@ -104,7 +104,7 @@ main :: () {
 
     ok = init(*twitch, event_callback, *chat_log, verbose = true);
     if !ok {
-        log_error("Could not initialize Twitch connection\n");
+        log_error("ERROR: Could not initialize Twitch connection");
         // Realistically as of right now this can only happen on Windows when WSAStartup() fails.
         // I'm not sure what to do in that case, so let's just exit;
         exit(1);
@@ -215,14 +215,14 @@ parse_config :: () -> Config, bool {
 
     home_dir, ok := get_home_directory();
     if !ok {
-        print("ERROR: could not get home folder for some reason\n");
+        log_error("ERROR: Could not get home folder for some reason");
         return config, false;
     }
 
     ditch_dir := join(home_dir, ".ditch", separator = PATH_SEPARATOR_STRING);
     ok = make_directory_if_it_does_not_exist(ditch_dir);
     if !ok {
-        print("ERROR: could not create folder %\n", ditch_dir);
+        log_error("ERROR: Could not create folder %", ditch_dir);
         return config, false;
     }
 
@@ -242,17 +242,17 @@ client_id ""
 // vim: set filetype=c :
 CONF, config.username, config.auto_join));
         if !ok {
-            print("ERROR: could not generate default %\n", ditch_conf_path);
+            log_error("ERROR: Could not generate default %", ditch_conf_path);
             return config, false;
         }
-        print("INFO: Generated default %\n", ditch_conf_path);
+        log("INFO: Generated default %", ditch_conf_path);
         return config, true;
     }
 
     ditch_content: string;
     ditch_content, ok = read_entire_file(ditch_conf_path);
     if !ok {
-        print("ERROR: could not read file %\n", ditch_conf_path);
+        log_error("ERROR: Could not read file %", ditch_conf_path);
         return config, false;
     }
     lexer := lexer_new(ditch_content, ditch_conf_path);
@@ -312,40 +312,40 @@ set_current_title_to :: (config: Config, title: string) -> bool {
 
     ok, content, code := request(.PATCH, url, config.client_id, config.oauth_token, data = data);
     if !ok {
-        print("ERROR: could not patch current title at %\n", url);
+        log_error("ERROR: Could not patch current title at %", url);
         return false;
     }
 
     if code >= 400 {
-        print("ERROR: query to % return code %: %\n", url, code, content);
+        log_error("ERROR: Query to % return code %: %", url, code, content);
         return false;
     }
 
-    print("INFO: successfully set the title to %\n", title);
+    log("INFO: Successfully set the title to \"%\"", title);
     return true;
 }
 
 get_first_twitch_payload :: ($Payload: Type, config: Config, url: string, data: string) -> Payload, bool {
     ok, content, code := request(.GET, url, config.client_id, config.oauth_token, data = data);
     if !ok {
-        print("ERROR: could not query % via %\n", Type, url);
+        log_error("ERROR: Could not query % via %", Type, url);
         return .{}, false;
     }
 
     if code >= 400 {
-        print("ERROR: query to % return code %: %\n", url, code, content);
+        log_error("ERROR: Query to % return code %: %", url, code, content);
         return .{}, false;
     }
 
     payload : Twitch_Payload(Payload);
     ok, payload = json_parse_string(content, type_of(payload));
     if !ok {
-        print("ERROR: could not parse Twitch payload from %: %\n", url, content);
+        log_error("ERROR: Could not parse Twitch payload from %: %", url, content);
         return .{}, false;
     }
 
     if payload.data.count <= 0 {
-        print("ERROR: Twitch payload from % does not contain any %\n", url, Payload);
+        log_error("ERROR: Twitch payload from % does not contain any %", url, Payload);
         return .{}, false;
     }
 
@@ -371,7 +371,7 @@ reload_fonts :: () -> bool {
     pixel_height := window_height / 24;
     my_font = Simp.get_font_at_size("fonts", font_file_name, pixel_height);
     if my_font == null {
-        print("ERROR: could not load font % with size %\n", font_file_name, pixel_height);
+        log_error("ERROR: Could not load font % with size %", font_file_name, pixel_height);
         return false;
     }
     return true;
@@ -405,7 +405,7 @@ request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: s
     // Init Curl and setup a deferred cleanup
     curl := curl_easy_init();
     if !curl {
-+       print("An error occured while initting up the curl connection, but Curl doesn't tell us why.\n");
+        log_error("ERROR: An error occured while initting up the curl connection, but Curl doesn't tell us why.");
         return false, "", 0;
     }
     defer curl_easy_cleanup(curl);
@@ -464,7 +464,7 @@ request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: s
     if error_code != .OK {
         error_message := to_string(curl_easy_strerror(error_code));
         defer free(error_message);
-        print("Curl Error: %\n", error_message);
+        log_error("Curl Error: %", error_message);
         return false, "", 0;
     }
 
@@ -494,5 +494,4 @@ Input :: #import "Input";
 #load "jason/module.jai";
 #load "config_lexer.jai";
 
-// TODO: replace all the necessary print-s with log-s or log_error-s
 // TODO: consider utilizing GLOBALUSERSTATE instead of query_current_user() to get the user-id

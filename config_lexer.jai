@@ -49,14 +49,16 @@ Diag_Level :: enum {
 }
 
 log_diag_at :: (using loc: Loc, level: Diag_Level, format: string, args: .. Any) {
-    print("%:%:%: ", file_path, row + 1, col + 1);
+    builder: String_Builder;
+    builder.allocator = temp;
+    print_to_builder(*builder, "%:%:%: ", file_path, row + 1, col + 1);
     if #complete level == {
-    case .NOTE;    print("NOTE: ");
-    case .WARNING; print("WARNING: ");
-    case .ERROR;   print("ERROR: ");
+    case .NOTE;    print_to_builder(*builder, "NOTE: ");
+    case .WARNING; print_to_builder(*builder, "WARNING: ");
+    case .ERROR;   print_to_builder(*builder, "ERROR: ");
     }
-    print(format, .. args);
-    print("\n");
+    print_to_builder(*builder, format, .. args);
+    log_error(builder_to_string(*builder));
 }
 
 lexer_peek :: (using l: *Lexer) -> Token, Lexer_Result {
