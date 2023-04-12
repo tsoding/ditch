@@ -173,15 +173,15 @@ main :: () {
         local_copy_of_current_stream_for_thread_safety := current_stream;
         unlock(*current_stream_mutex);
 
+        MESSAGE_PADDING :: 10;
+
         viewer_count_text := tprint("Viewers: %", local_copy_of_current_stream_for_thread_safety.viewer_count);
         Simp.prepare_text(my_font, viewer_count_text);
-        Simp.draw_prepared_text(my_font, 0, 0, INFO_COLOR);
+        Simp.draw_prepared_text(my_font, MESSAGE_PADDING, 0 + MESSAGE_PADDING, INFO_COLOR);
 
         title_text := tprint("Title: %", local_copy_of_current_stream_for_thread_safety.title);
         Simp.prepare_text(my_font, title_text);
-        Simp.draw_prepared_text(my_font, 0, window_height/24, INFO_COLOR);
-
-        MESSAGE_PADDING :: 10;
+        Simp.draw_prepared_text(my_font, MESSAGE_PADDING, window_height/24 + MESSAGE_PADDING, INFO_COLOR);
 
         for < chat_log {
             row := it_index - 2;
@@ -189,11 +189,11 @@ main :: () {
 
             nick_text := tprint("<%> ", it.nick);
             nick_width := Simp.prepare_text(my_font, nick_text);
-            Simp.draw_prepared_text(my_font, 0, y, NICK_COLOR);
+            Simp.draw_prepared_text(my_font, MESSAGE_PADDING, y + MESSAGE_PADDING, NICK_COLOR);
 
             message_text := it.message;
             Simp.prepare_text(my_font, message_text);
-            Simp.draw_prepared_text(my_font, nick_width, y, MESSAGE_COLOR);
+            Simp.draw_prepared_text(my_font, MESSAGE_PADDING + nick_width, y + MESSAGE_PADDING, MESSAGE_COLOR);
         }
         Simp.swap_buffers(window);
 
