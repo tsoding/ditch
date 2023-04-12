@@ -37,6 +37,20 @@ current_stream: Twitch_Stream;
 current_stream_mutex: Mutex;
 current_config: Config;
 
+hexcode :: (code: string) -> Vector4 {
+    value := string_to_int(code, base = 16, T = u64);
+    a := ((value>>(8*0))&0xFF)/255.0;
+    b := ((value>>(8*1))&0xFF)/255.0;
+    g := ((value>>(8*2))&0xFF)/255.0;
+    r := ((value>>(8*3))&0xFF)/255.0;
+    return .{r, g, b, a};
+}
+
+BACKGROUND_COLOR :: #run hexcode("121f05ff");
+INFO_COLOR       :: #run hexcode("c8f67aff");
+NICK_COLOR       :: #run hexcode("c4d533ff");
+MESSAGE_COLOR    :: #run hexcode("ffffffff");
+
 main :: () {
     directory_of_running_executable := path_strip_filename(get_path_of_running_executable());
     set_working_directory(directory_of_running_executable);
@@ -143,17 +157,8 @@ main :: () {
             }
         }
 
-        hexcode :: (code: string) -> Vector4 {
-            value := string_to_int(code, base = 16, T = u64);
-            a := ((value>>(8*0))&0xFF)/255.0;
-            b := ((value>>(8*1))&0xFF)/255.0;
-            g := ((value>>(8*2))&0xFF)/255.0;
-            r := ((value>>(8*3))&0xFF)/255.0;
-            return make_vector4(r, g, b, a);
-        }
-
         {
-            using background_color :: #run hexcode("121f05ff");
+            using BACKGROUND_COLOR;
             Simp.clear_render_target(x, y, z, w);
         }
 
@@ -161,15 +166,13 @@ main :: () {
         local_copy_of_current_stream_for_thread_safety := current_stream;
         unlock(*current_stream_mutex);
 
-        info_color :: #run hexcode("c8f67aff");
-
         viewer_count_text := tprint("Viewers: %", local_copy_of_current_stream_for_thread_safety.viewer_count);
         Simp.prepare_text(my_font, viewer_count_text);
-        Simp.draw_prepared_text(my_font, 0, 0, info_color);
+        Simp.draw_prepared_text(my_font, 0, 0, INFO_COLOR);
 
         title_text := tprint("Title: %", local_copy_of_current_stream_for_thread_safety.title);
         Simp.prepare_text(my_font, title_text);
-        Simp.draw_prepared_text(my_font, 0, window_height/24, info_color);
+        Simp.draw_prepared_text(my_font, 0, window_height/24, INFO_COLOR);
 
         MESSAGE_PADDING :: 10;
 
@@ -177,15 +180,13 @@ main :: () {
             row := it_index - 2;
             y := (window_height/24 + MESSAGE_PADDING)*(chat_log.count - row - 1);
 
-            nick_color :: #run hexcode("c4d533ff");
             nick_text := tprint("<%> ", it.nick);
             nick_width := Simp.prepare_text(my_font, nick_text);
-            Simp.draw_prepared_text(my_font, 0, y, nick_color);
+            Simp.draw_prepared_text(my_font, 0, y, NICK_COLOR);
 
-            message_color :: #run hexcode("ffffffff");
             message_text := it.message;
             Simp.prepare_text(my_font, message_text);
-            Simp.draw_prepared_text(my_font, nick_width, y, message_color);
+            Simp.draw_prepared_text(my_font, nick_width, y, MESSAGE_COLOR);
         }
         Simp.swap_buffers(window);
 
