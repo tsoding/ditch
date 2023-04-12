@@ -91,7 +91,7 @@ main :: () {
     event_callback :: (event: Twitch_Event, chat_log: *[..]Chat_Message) {
         if event.type == {
             case .AUTHENTICATED; {
-                cmd_join(*twitch, "#tsoding");
+                cmd_join(*twitch, current_config.auto_join);
             }
             case .PRIVMSG; {
                 array_add(chat_log, .{
@@ -149,7 +149,7 @@ main :: () {
                     if event.key_code == {
                         case .ENTER; {
                             message := os_clipboard_get_text();
-                            cmd_privmsg(*twitch, "#tsoding", message);
+                            cmd_privmsg(*twitch, current_config.auto_join, message);
                             array_add(*chat_log, .{
                                 nick = current_config.username,
                                 message = message,
