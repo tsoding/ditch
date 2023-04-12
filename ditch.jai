@@ -103,7 +103,12 @@ main :: () {
     }
 
     ok = init(*twitch, event_callback, *chat_log, verbose = true);
-    if !ok then exit(1);
+    if !ok {
+        log_error("Could not initialize Twitch connection\n");
+        // Realistically as of right now this can only happen on Windows when WSAStartup() fails.
+        // I'm not sure what to do in that case, so let's just exit;
+        exit(1);
+    }
     ok = connect(*twitch, current_config.username, tprint("oauth:%", current_config.oauth_token));
     if !ok then exit(1);
     defer deinit(*twitch);
@@ -119,7 +124,7 @@ main :: () {
         last_time = current_time;
 
         ok = update(*twitch, 0);
-        if !ok then break; // Or reconnect or whatever
+        // if !ok then break; // Or reconnect or whatever
 
         Input.update_window_events();
 
@@ -488,3 +493,6 @@ Input :: #import "Input";
 #load "twitch_irc/module.jai";
 #load "jason/module.jai";
 #load "config_lexer.jai";
+
+// TODO: replace all the necessary print-s with log-s or log_error-s
+// TODO: consider utilizing GLOBALUSERSTATE instead of query_current_user() to get the user-id
