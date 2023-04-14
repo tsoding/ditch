@@ -26,6 +26,7 @@ Config :: struct {
     client_id: string;
 }
 
+window: Window_Type;
 window_width, window_height: int;
 my_font:     *Font;
 
@@ -36,6 +37,11 @@ current_user: Twitch_User;
 current_stream: Twitch_Stream;
 current_stream_mutex: Mutex;
 current_config: Config;
+
+current_time: float64;
+last_time: float64;
+
+string_a: string;
 
 hexcode :: (code: string) -> Vector4 {
     value := string_to_int(code, base = 16, T = u64);
@@ -61,10 +67,11 @@ main :: () {
     window_width = 800;
     window_height = 600;
     window_title :: "Ditch";
-    window := create_window(window_width, window_height, window_title);
+    window = create_window(window_width, window_height, window_title);
     Simp.set_render_target(window);
 
     reload_fonts();
+    ui_init();
 
     init(*current_stream_mutex);
     viewer_count_thread: Thread;
@@ -117,9 +124,6 @@ main :: () {
         exit(1);
     }
 
-    current_time: float64;
-    last_time: float64;
-
     quit := false;
     while !quit {
         current_time = get_time();
@@ -147,20 +151,12 @@ main :: () {
         for event: Input.events_this_frame {
             if event.type == .QUIT then quit = true;
 
+            getrect_handle_event(event);
+
             if event.type == {
             case .KEYBOARD;
                 if event.key_pressed {
                     if event.key_code == {
-                        case .ENTER; {
-                            // TODO: use GetRect's text_input instead of clipboard
-                            message := os_clipboard_get_text();
-                            cmd_privmsg(*twitch, current_config.auto_join, message);
-                            array_add(*chat_log, .{
-                                nick = current_config.username,
-                                message = message,
-                            });
-                        }
-
                         case #char "T"; if event.ctrl_pressed {
                             set_current_title_to(current_config, os_clipboard_get_text());
                         }
@@ -169,42 +165,104 @@ main :: () {
             }
         }
 
-        {
-            using BACKGROUND_COLOR;
-            Simp.clear_render_target(x, y, z, w);
-        }
-
         lock(*current_stream_mutex);
         local_copy_of_current_stream_for_thread_safety := current_stream;
         unlock(*current_stream_mutex);
 
-        MESSAGE_PADDING :: 10;
-
-        viewer_count_text := tprint("Viewers: %", local_copy_of_current_stream_for_thread_safety.viewer_count);
-        Simp.prepare_text(my_font, viewer_count_text);
-        Simp.draw_prepared_text(my_font, MESSAGE_PADDING, 0 + MESSAGE_PADDING, INFO_COLOR);
-
-        title_text := tprint("Title: %", local_copy_of_current_stream_for_thread_safety.title);
-        Simp.prepare_text(my_font, title_text);
-        Simp.draw_prepared_text(my_font, MESSAGE_PADDING, window_height/24 + MESSAGE_PADDING, INFO_COLOR);
-
-        for < chat_log {
-            row := it_index - 2;
-            y := (window_height/24 + MESSAGE_PADDING)*(chat_log.count - row - 1);
-
-            nick_text := tprint("<%> ", it.nick);
-            nick_width := Simp.prepare_text(my_font, nick_text);
-            Simp.draw_prepared_text(my_font, MESSAGE_PADDING, y + MESSAGE_PADDING, NICK_COLOR);
-
-            message_text := it.message;
-            Simp.prepare_text(my_font, message_text);
-            Simp.draw_prepared_text(my_font, MESSAGE_PADDING + nick_width, y + MESSAGE_PADDING, MESSAGE_COLOR);
-        }
-        Simp.swap_buffers(window);
+        draw_one_frame(local_copy_of_current_stream_for_thread_safety);
 
         reset_temporary_storage();
         sleep_milliseconds(10);
     }
+}
+
+draw_one_frame :: (stream: Twitch_Stream) {
+    current_theme: s32 = xx Default_Themes.Default;
+    proc := default_theme_procs[current_theme];
+    my_theme := proc();
+    set_default_theme(my_theme);  // Just in case we don't explicitly pass themes sometimes...!
+
+    {
+        using BACKGROUND_COLOR;
+        Simp.clear_render_target(x, y, z, w);
+    }
+
+    x, y, width, height := get_dimensions(window, true);
+    ui_per_frame_update(window, width, height, current_time);
+
+    MESSAGE_PADDING :: 10;
+
+    modify_string :: (ps: *string, new_value: string) {
+        free(<<ps);
+            <<ps = copy_string(new_value);
+    }
+
+    text_theme := my_theme.text_input_theme;
+    text_theme.font = my_font;
+
+    r := get_rect(0, 0, xx width, 50);
+    action_a, new_text_a, state_a := text_input(r, string_a, *text_theme);
+    if action_a & .ENTERED {
+        cmd_privmsg(*twitch, current_config.auto_join, new_text_a);
+        array_add(*chat_log, .{
+            nick = current_config.username,
+            message = copy_string(new_text_a),
+        });
+        free(string_a);
+        string_a.data = null;
+        string_a.count = 0;
+        activate(state_a);
+    } else if action_a & .ESCAPED {
+        modify_string(*string_a, new_text_a);
+    }
+
+
+
+    for < chat_log {
+        row := it_index - 2;
+        y := (window_height/24 + MESSAGE_PADDING)*(chat_log.count - row - 1);
+
+        nick_text := tprint("<%> ", it.nick);
+        nick_width := Simp.prepare_text(my_font, nick_text);
+        Simp.draw_prepared_text(my_font, MESSAGE_PADDING, y + MESSAGE_PADDING, NICK_COLOR);
+
+        message_text := it.message;
+        Simp.prepare_text(my_font, message_text);
+        Simp.draw_prepared_text(my_font, MESSAGE_PADDING + nick_width, y + MESSAGE_PADDING, MESSAGE_COLOR);
+    }
+
+    {
+        label_theme := my_theme.label_theme;
+        label_theme.font = my_font;
+        label_theme.alignment = .Right;
+        label_height := my_font.character_height*1.5;
+
+        SHADOW_OFFSET :: 2;
+        SHADOW_COLOR :: #run hexcode("181818FF");
+
+        viewer_count_text := tprint("Viewers: %", stream.viewer_count);
+
+        label_theme.text_color = SHADOW_COLOR;
+        r = get_rect(0 - SHADOW_OFFSET, window_height - label_height - SHADOW_OFFSET, xx window_width, label_height);
+        label(r, viewer_count_text, *label_theme);
+
+        label_theme.text_color = INFO_COLOR;
+        r = get_rect(0, window_height - label_height, xx window_width, label_height);
+        label(r, viewer_count_text, *label_theme);
+
+        title_text := tprint("Title: %", stream.title);
+
+        label_theme.text_color = SHADOW_COLOR;
+        r = get_rect(0 - SHADOW_OFFSET, window_height - label_height*2 - SHADOW_OFFSET, xx window_width, label_height);
+        label(r, title_text, *label_theme);
+
+        label_theme.text_color = INFO_COLOR;
+        r = get_rect(0, window_height - label_height*2, xx window_width, label_height);
+        label(r, title_text, *label_theme);
+
+    }
+
+    Simp.swap_buffers(window);
 }
 
 #if OS == .WINDOWS {
@@ -485,6 +543,7 @@ request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: s
 #import "Basic";
 #import "File_Utilities";
 #import "Window_Creation";
+#import "GetRect";
 Simp :: #import "Simp";
 Font :: Simp.Dynamic_Font;
 #import "Math";
@@ -500,3 +559,7 @@ Input :: #import "Input";
 #load "config_lexer.jai";
 
 // TODO: consider utilizing GLOBALUSERSTATE instead of query_current_user() to get the user-id
+
+// TODO: reuse the GetRect themes for the whole application
+// TODO: set the title via the chat text input
+// TODO: try to use text_display widget for the chat window
