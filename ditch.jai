@@ -152,6 +152,7 @@ main :: () {
                 if event.key_pressed {
                     if event.key_code == {
                         case .ENTER; {
+                            // TODO: use GetRect's text_input instead of clipboard
                             message := os_clipboard_get_text();
                             cmd_privmsg(*twitch, current_config.auto_join, message);
                             array_add(*chat_log, .{
