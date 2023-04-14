@@ -48,6 +48,7 @@ Diag_Level :: enum {
     ERROR;
 }
 
+// TODO: maybe integrate with Jai's logger and Location?
 log_diag_at :: (using loc: Loc, level: Diag_Level, format: string, args: .. Any) {
     builder: String_Builder;
     builder.allocator = temp;
