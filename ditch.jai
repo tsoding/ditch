@@ -37,6 +37,7 @@ current_user: Twitch_User;
 current_stream: Twitch_Stream;
 current_stream_mutex: Mutex;
 current_config: Config;
+current_theme: s32 = xx Default_Themes.Grayscale;
 
 current_time: float64;
 last_time: float64;
@@ -56,6 +57,7 @@ BACKGROUND_COLOR :: #run hexcode("121f05ff");
 INFO_COLOR       :: #run hexcode("c8f67aff");
 NICK_COLOR       :: #run hexcode("c4d533ff");
 MESSAGE_COLOR    :: #run hexcode("ffffffff");
+SHADOW_COLOR     :: #run hexcode("181818FF");
 
 main :: () {
     directory_of_running_executable := path_strip_filename(get_path_of_running_executable());
@@ -118,7 +120,17 @@ main :: () {
     }
     defer deinit(*twitch);
 
-    ok = connect(*twitch, current_config.username, tprint("oauth:%", current_config.oauth_token));
+    ret := OpenSSL_add_all_algorithms();
+    assert(ret == 1);
+    ret = SSL_load_error_strings();
+    assert(ret == 1);
+    ctx := SSL_CTX_new(TLS_client_method());
+    if ctx == null {
+        print("ERROR: could not initialize SSL context\n");
+        exit(1);
+    }
+
+    ok = connect(*twitch, current_config.username, tprint("oauth:%", current_config.oauth_token), port = "6697", ssl_ctx = ctx);
     if !ok {
         log_error("ERROR: Could not connect to Twitch");
         exit(1);
@@ -177,15 +189,12 @@ main :: () {
 }
 
 draw_one_frame :: (stream: Twitch_Stream) {
-    current_theme: s32 = xx Default_Themes.Default;
     proc := default_theme_procs[current_theme];
     my_theme := proc();
     set_default_theme(my_theme);  // Just in case we don't explicitly pass themes sometimes...!
 
-    {
-        using BACKGROUND_COLOR;
-        Simp.clear_render_target(x, y, z, w);
-    }
+    bg_col := my_theme.background_color;
+    Simp.clear_render_target(bg_col.x, bg_col.y, bg_col.z, 1);
 
     x, y, width, height := get_dimensions(window, true);
     ui_per_frame_update(window, width, height, current_time);
@@ -200,7 +209,9 @@ draw_one_frame :: (stream: Twitch_Stream) {
     text_theme := my_theme.text_input_theme;
     text_theme.font = my_font;
 
-    r := get_rect(0, 0, xx width, 50);
+    INPUT_FIELD_HEIGHT :: 50;
+
+    r := get_rect(0, 0, xx width, INPUT_FIELD_HEIGHT);
     action_a, new_text_a, state_a := text_input(r, string_a, *text_theme);
     if action_a & .ENTERED {
         cmd_privmsg(*twitch, current_config.auto_join, new_text_a);
@@ -215,8 +226,6 @@ draw_one_frame :: (stream: Twitch_Stream) {
     } else if action_a & .ESCAPED {
         modify_string(*string_a, new_text_a);
     }
-
-
 
     for < chat_log {
         row := it_index - 2;
@@ -238,7 +247,6 @@ draw_one_frame :: (stream: Twitch_Stream) {
         label_height := my_font.character_height*1.5;
 
         SHADOW_OFFSET :: 2;
-        SHADOW_COLOR :: #run hexcode("181818FF");
 
         viewer_count_text := tprint("Viewers: %", stream.viewer_count);
 
@@ -431,6 +439,9 @@ query_current_user :: (config: Config) -> Twitch_User, bool {
 
 reload_fonts :: () -> bool {
     font_file_name :: "iosevka-regular.ttf";
+    // font_file_name :: "VictorMono-Regular.ttf";
+    // font_file_name :: "Miama.otf";
+    // font_file_name :: "OpenSans-BoldItalic.ttf";
     pixel_height := window_height / 24;
     my_font = Simp.get_font_at_size("fonts", font_file_name, pixel_height);
     if my_font == null {
@@ -465,6 +476,8 @@ Rest_Method :: enum {
 // This allows us to combine multiple functions into one, and cut on typing the same code multiple times,
 // the way we distpatch between different methods is using #if keyword
 request :: ($method: Rest_Method, url: string, client_id: string, oauth_token: string, data := "") -> bool, string, int {
+    #import "Curl";
+
     // Init Curl and setup a deferred cleanup
     curl := curl_easy_init();
     if !curl {
@@ -550,7 +563,6 @@ Font :: Simp.Dynamic_Font;
 #import "String";
 #import "System";
 #import "Thread";
-#import "Curl";
 #import "Atomics";
 #import "Clipboard";
 Input :: #import "Input";
@@ -559,7 +571,4 @@ Input :: #import "Input";
 #load "config_lexer.jai";
 
 // TODO: consider utilizing GLOBALUSERSTATE instead of query_current_user() to get the user-id
-
-// TODO: reuse the GetRect themes for the whole application
 // TODO: set the title via the chat text input
-// TODO: try to use text_display widget for the chat window
