@@ -120,6 +120,7 @@ main :: () {
     }
     defer deinit(*twitch);
 
+    // TODO: Move SSL initialization to twitch_irc
     ret := OpenSSL_add_all_algorithms();
     assert(ret == 1);
     ret = SSL_load_error_strings();
