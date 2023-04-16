@@ -42,7 +42,8 @@ current_theme: s32 = xx Default_Themes.Grayscale;
 current_time: float64;
 last_time: float64;
 
-string_a: string;
+chat_input: string;
+chat_input_first_activate := false;
 
 hexcode :: (code: string) -> Vector4 {
     value := string_to_int(code, base = 16, T = u64);
@@ -213,19 +214,23 @@ draw_one_frame :: (stream: Twitch_Stream) {
     INPUT_FIELD_HEIGHT :: 50;
 
     r := get_rect(0, 0, xx width, INPUT_FIELD_HEIGHT);
-    action_a, new_text_a, state_a := text_input(r, string_a, *text_theme);
-    if action_a & .ENTERED {
-        cmd_privmsg(*twitch, current_config.auto_join, new_text_a);
+    chat_input_action, new_chat_input, chat_input_state := text_input(r, chat_input, *text_theme);
+    if !chat_input_first_activate {
+        chat_input_first_activate = true;
+        activate(chat_input_state);
+    }
+    if chat_input_action & .ENTERED {
+        cmd_privmsg(*twitch, current_config.auto_join, new_chat_input);
         array_add(*chat_log, .{
             nick = current_config.username,
-            message = copy_string(new_text_a),
+            message = copy_string(new_chat_input),
         });
-        free(string_a);
-        string_a.data = null;
-        string_a.count = 0;
-        activate(state_a);
-    } else if action_a & .ESCAPED {
-        modify_string(*string_a, new_text_a);
+        free(chat_input);
+        chat_input.data = null;
+        chat_input.count = 0;
+        activate(chat_input_state);
+    } else if chat_input_action & .ESCAPED {
+        modify_string(*chat_input, new_chat_input);
     }
 
     for < chat_log {
