@@ -222,11 +222,13 @@ draw_one_frame :: (stream: Twitch_Stream) {
         activate(chat_input_state);
     }
     if chat_input_action & .ENTERED {
-        cmd_privmsg(*twitch, current_config.auto_join, new_chat_input);
-        array_add(*chat_log, .{
-            nick = current_config.username,
-            message = copy_string(new_chat_input),
-        });
+        if twitch.status & .AUTHENTICATED {
+            cmd_privmsg(*twitch, current_config.auto_join, new_chat_input);
+            array_add(*chat_log, .{
+                nick = current_config.username,
+                message = copy_string(new_chat_input),
+            });
+        }
         free(chat_input);
         chat_input.data = null;
         chat_input.count = 0;
