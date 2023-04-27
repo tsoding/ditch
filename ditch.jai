@@ -145,8 +145,10 @@ main :: () {
         Clamp(*dt, 0, 0.1);
         last_time = current_time;
 
-        ok = update(*twitch, 0);
-        // if !ok then break; // TODO: reconnect on Twitch connection failure
+        
+        if twitch.status != .DISCONNECTED {
+            ok = update(*twitch, 0);
+        }
 
         Input.update_window_events();
 
